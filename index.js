@@ -1,8 +1,18 @@
+const express = require("express");
+const http = require("http");
+const { createRoomWsServer } = require("./app-ws");
 const app = require("./app");
-const appWs = require("./app-ws");
 
-const server = app.listen(process.env.PORT || 3000, () => {
-  console.log(`App Express is running!`);
+const server = http.createServer(app);
+
+// Middleware ou outras configurações do Express podem ser adicionados aqui
+app.get("/", (req, res) => {
+  res.send("Servidor Express está funcionando!");
 });
 
-appWs(server);
+const roomId = 11;
+createRoomWsServer(server, roomId);
+
+server.listen(3000, () => {
+  console.log("App Express is running on http://localhost:3000");
+});

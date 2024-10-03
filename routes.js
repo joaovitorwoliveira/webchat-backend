@@ -1,5 +1,6 @@
 const express = require("express");
 const { PrismaClient } = require("@prisma/client");
+const { createRoomWsServer } = require("./app-ws");
 
 const prisma = new PrismaClient();
 const router = express.Router();
@@ -24,10 +25,15 @@ router.post("/rooms", async (req, res) => {
       },
     });
 
+    // Cria um WebSocket Server para essa sala
+    createRoomWsServer(req.app.get("server"), newRoom.id);
+
     res.status(201).json(newRoom);
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: "Error creating room" });
+    console.error("Erro ao criar a sala:", error);
+    res
+      .status(500)
+      .json({ message: "Error creating room", error: error.message });
   }
 });
 
