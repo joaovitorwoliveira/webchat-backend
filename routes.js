@@ -7,20 +7,26 @@ const router = express.Router();
 
 // Criar uma sala
 router.post("/rooms", async (req, res) => {
-  const { roomName, userIds } = req.body;
+  const { roomName, userName } = req.body;
 
-  if (!roomName || !userIds || !Array.isArray(userIds)) {
+  if (!roomName || !userName) {
     return res
       .status(400)
-      .json({ message: "Room name and user IDs are required" });
+      .json({ message: "Room name and user name are required" });
   }
 
   try {
+    // Cria um novo usuário
+    const newUser = await prisma.user.create({
+      data: { name: userName },
+    });
+
+    // Cria uma nova sala
     const newRoom = await prisma.room.create({
       data: {
         name: roomName,
         users: {
-          connect: userIds.map((id) => ({ id })),
+          connect: [{ id: newUser.id }],
         },
       },
     });
@@ -28,7 +34,7 @@ router.post("/rooms", async (req, res) => {
     // Cria um WebSocket Server para essa sala
     createRoomWsServer(req.app.get("server"), newRoom.id);
 
-    res.status(201).json(newRoom);
+    res.status(201).json({ roomId: newRoom.id, userId: newUser.id });
   } catch (error) {
     console.error("Erro ao criar a sala:", error);
     res
@@ -37,15 +43,13 @@ router.post("/rooms", async (req, res) => {
   }
 });
 
-// Enviar uma mensagem para uma sala
-router.post("/rooms/:roomId/messages", async (req, res) => {
+// Entrar em uma sala
+router.post("/rooms/:roomId/join", async (req, res) => {
   const { roomId } = req.params;
-  const { content, userId } = req.body;
+  const { userName } = req.body;
 
-  if (!content || !userId) {
-    return res
-      .status(400)
-      .json({ message: "Message content and user ID are required" });
+  if (!userName) {
+    return res.status(400).json({ message: "User name is required" });
   }
 
   try {
@@ -57,41 +61,27 @@ router.post("/rooms/:roomId/messages", async (req, res) => {
       return res.status(404).json({ message: "Room not found" });
     }
 
-    const newMessage = await prisma.message.create({
+    // Cria um novo usuário
+    const newUser = await prisma.user.create({
+      data: { name: userName },
+    });
+
+    // Conecta o novo usuário à sala
+    await prisma.room.update({
+      where: { id: parseInt(roomId) },
       data: {
-        content,
-        userId,
-        roomId: parseInt(roomId),
+        users: {
+          connect: [{ id: newUser.id }],
+        },
       },
     });
 
-    // Broadcast via WebSocket (se disponível)
-    if (req.app.get("wss")) {
-      const wss = req.app.get("wss");
-      wss.broadcast({ roomId, newMessage });
-    }
-
-    res.status(201).json(newMessage);
+    res.status(200).json({ roomId: roomExists.id, userId: newUser.id });
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: "Error sending message" });
-  }
-});
-
-// Listar mensagens de uma sala
-router.get("/rooms/:roomId/messages", async (req, res) => {
-  const { roomId } = req.params;
-
-  try {
-    const messages = await prisma.message.findMany({
-      where: { roomId: parseInt(roomId) },
-      include: { user: true },
-    });
-
-    res.status(200).json(messages);
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: "Error fetching messages" });
+    console.error("Erro ao entrar na sala:", error);
+    res
+      .status(500)
+      .json({ message: "Error joining room", error: error.message });
   }
 });
 
@@ -124,26 +114,6 @@ router.get("/users", async (req, res) => {
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: "Error fetching users" });
-  }
-});
-
-// Listar todas as salas de um usuário
-router.get("/users/:userId/rooms", async (req, res) => {
-  const { userId } = req.params;
-
-  try {
-    const userRooms = await prisma.room.findMany({
-      where: {
-        users: {
-          some: { id: parseInt(userId) },
-        },
-      },
-    });
-
-    res.status(200).json(userRooms);
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: "Error fetching user rooms" });
   }
 });
 

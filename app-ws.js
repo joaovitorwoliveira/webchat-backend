@@ -1,25 +1,10 @@
 const WebSocket = require("ws");
 
-const roomWebSockets = new Map(); // Mapeia roomId para WebSocket Servers
-const clientSockets = new Map(); // Mapeia roomId para arrays de WebSockets de clientes
+const roomWebSockets = new Map();
+const clientSockets = new Map();
 
 function onError(ws, err) {
   console.error(`onError: ${err.message}`);
-}
-
-function onMessage(ws, data) {
-  const message = JSON.parse(data);
-  const { roomId, content } = message;
-
-  // Broadcast the message to all clients in the room
-  if (clientSockets.has(roomId)) {
-    const clients = clientSockets.get(roomId);
-    clients.forEach((client) => {
-      if (client.readyState === WebSocket.OPEN) {
-        client.send(JSON.stringify({ roomId, content }));
-      }
-    });
-  }
 }
 
 function onConnection(ws, req, roomId) {
@@ -27,26 +12,37 @@ function onConnection(ws, req, roomId) {
     clientSockets.set(roomId, []);
   }
 
-  clientSockets.get(roomId).push(ws);
+  const roomClients = clientSockets.get(roomId);
+  roomClients.push(ws);
 
   ws.on("message", (data) => {
     try {
-      const parsedData = JSON.parse(data); // Tente fazer o parse da mensagem
-
-      // Aqui você pode usar parsedData.message
+      const parsedData = JSON.parse(data);
       console.log("Mensagem recebida:", parsedData.message);
 
-      // Enviar uma resposta, se necessário
-      ws.send(`Mensagem recebida: ${parsedData.message}`);
+      // Envia a mensagem para todos os clientes conectados na sala
+      roomClients.forEach((client) => {
+        if (client !== ws && client.readyState === WebSocket.OPEN) {
+          client.send(
+            JSON.stringify({
+              from: parsedData.sender,
+              message: parsedData.message,
+            })
+          );
+        }
+      });
+
+      ws.send(JSON.stringify({ from: "Você", message: parsedData.message }));
     } catch (error) {
       console.error("Erro ao processar a mensagem:", error);
-      // Você pode enviar uma mensagem de erro de volta para o cliente, se desejar
       ws.send('Formato de mensagem inválido. Use {"message": "sua mensagem"}');
     }
   });
+
   ws.on("error", (error) => onError(ws, error));
   ws.on("close", () => {
-    clientSockets.get(roomId).filter((client) => client !== ws);
+    const filteredClients = roomClients.filter((client) => client !== ws);
+    clientSockets.set(roomId, filteredClients);
   });
 
   console.log(`Conectado ao servidor WebSocket na sala ${roomId}!`);
@@ -67,7 +63,6 @@ function createRoomWsServer(server, roomId) {
       socket.destroy();
     }
   });
-
   roomWebSockets.set(roomId, wss);
   console.log(`WebSocket Server criado para a sala ${roomId}`);
 }

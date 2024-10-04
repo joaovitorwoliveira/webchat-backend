@@ -8,29 +8,17 @@ datasource db {
 }
 
 model User {
-  id        Int       @id @default(autoincrement())
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
+  id        Int      @id @default(autoincrement())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
   name      String?
-  rooms     Room[]    @relation("UserRooms")
-  messages  Message[]
+  rooms     Room[]   @relation("UserRooms")
 }
 
 model Room {
-  id        Int       @id @default(autoincrement())
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
-  name      String
-  users     User[]    @relation("UserRooms")
-  messages  Message[]
-}
-
-model Message {
   id        Int      @id @default(autoincrement())
   createdAt DateTime @default(now())
-  content   String
-  userId    Int
-  roomId    Int
-  user      User     @relation(fields: [userId], references: [id])
-  room      Room     @relation(fields: [roomId], references: [id])
+  updatedAt DateTime @updatedAt
+  name      String
+  users     User[]   @relation("UserRooms")
 }
