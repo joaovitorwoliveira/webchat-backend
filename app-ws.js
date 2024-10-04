@@ -12,37 +12,36 @@ function onConnection(ws, req, roomId) {
     clientSockets.set(roomId, []);
   }
 
-  const roomClients = clientSockets.get(roomId);
-  roomClients.push(ws);
+  clientSockets.get(roomId).push(ws);
 
   ws.on("message", (data) => {
     try {
       const parsedData = JSON.parse(data);
-      console.log("Mensagem recebida:", parsedData.message);
+      const { userName, message } = parsedData;
 
-      // Envia a mensagem para todos os clientes conectados na sala
-      roomClients.forEach((client) => {
+      console.log(`Mensagem recebida de ${userName}: ${message}`);
+
+      clientSockets.get(roomId).forEach((client) => {
         if (client !== ws && client.readyState === WebSocket.OPEN) {
-          client.send(
-            JSON.stringify({
-              from: parsedData.sender,
-              message: parsedData.message,
-            })
-          );
+          client.send(`${userName}: ${message}`);
         }
       });
 
-      ws.send(JSON.stringify({ from: "Você", message: parsedData.message }));
+      ws.send(`Você: ${message}`);
     } catch (error) {
       console.error("Erro ao processar a mensagem:", error);
-      ws.send('Formato de mensagem inválido. Use {"message": "sua mensagem"}');
+      ws.send(
+        'Formato de mensagem inválido. Use {"userName": "seu nome", "message": "sua mensagem"}'
+      );
     }
   });
 
   ws.on("error", (error) => onError(ws, error));
   ws.on("close", () => {
-    const filteredClients = roomClients.filter((client) => client !== ws);
-    clientSockets.set(roomId, filteredClients);
+    clientSockets.set(
+      roomId,
+      clientSockets.get(roomId).filter((client) => client !== ws)
+    );
   });
 
   console.log(`Conectado ao servidor WebSocket na sala ${roomId}!`);
