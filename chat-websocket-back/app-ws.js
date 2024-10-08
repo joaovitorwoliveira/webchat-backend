@@ -8,11 +8,25 @@ function onError(ws, err) {
 }
 
 function onConnection(ws, req, roomId) {
+  const urlParams = new URLSearchParams(req.url.split("?")[1]);
+  const userName = urlParams.get("userName") || "Usuário desconhecido";
+
+  ws.userName = userName;
+
+  console.log(`Conectado. URL: ${req.url}`);
+  console.log(`Novo usuário conectado: ${userName} na sala ${roomId}`);
+
   if (!clientSockets.has(roomId)) {
     clientSockets.set(roomId, []);
   }
 
   clientSockets.get(roomId).push(ws);
+
+  clientSockets.get(roomId).forEach((client) => {
+    if (client !== ws && client.readyState === WebSocket.OPEN) {
+      client.send(`${userName} entrou na sala`);
+    }
+  });
 
   ws.on("message", (data) => {
     try {
@@ -22,12 +36,14 @@ function onConnection(ws, req, roomId) {
       console.log(`Mensagem recebida de ${userName}: ${message}`);
 
       clientSockets.get(roomId).forEach((client) => {
-        if (client !== ws && client.readyState === WebSocket.OPEN) {
-          client.send(`${userName}: ${message}`);
+        if (client.readyState === WebSocket.OPEN) {
+          if (client === ws) {
+            client.send(`Você: ${message}`);
+          } else {
+            client.send(`${userName}: ${message}`);
+          }
         }
       });
-
-      ws.send(`Você: ${message}`);
     } catch (error) {
       console.error("Erro ao processar a mensagem:", error);
       ws.send(
@@ -35,16 +51,26 @@ function onConnection(ws, req, roomId) {
       );
     }
   });
-
   ws.on("error", (error) => onError(ws, error));
+
   ws.on("close", () => {
     clientSockets.set(
       roomId,
       clientSockets.get(roomId).filter((client) => client !== ws)
     );
-  });
 
-  console.log(`Conectado ao servidor WebSocket na sala ${roomId}!`);
+    clientSockets.get(roomId).forEach((client) => {
+      if (client.readyState === WebSocket.OPEN) {
+        client.send(`${ws.userName || "Usuário desconhecido"} se desconectou`);
+      }
+    });
+
+    console.log(
+      `${
+        ws.userName || "Usuário desconhecido"
+      } se desconectou da sala ${roomId}`
+    );
+  });
 }
 
 function createRoomWsServer(server, roomId) {
