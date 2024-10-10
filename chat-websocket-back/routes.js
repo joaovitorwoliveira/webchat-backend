@@ -1,12 +1,18 @@
 const express = require("express");
 const { PrismaClient } = require("@prisma/client");
 const { createRoomWsServer } = require("./app-ws");
-const { token } = require("morgan");
 
 const prisma = new PrismaClient();
 const router = express.Router();
 
-// Criar uma sala
+const parseRoomId = (id) => {
+  const parsedId = parseInt(id, 10);
+  if (isNaN(parsedId)) {
+    throw new Error("Invalid room ID");
+  }
+  return parsedId;
+};
+
 router.post("/rooms", async (req, res) => {
   const { roomName, userName } = req.body;
 
@@ -17,12 +23,10 @@ router.post("/rooms", async (req, res) => {
   }
 
   try {
-    // Cria um novo usuário
     const newUser = await prisma.user.create({
       data: { name: userName },
     });
 
-    // Cria uma nova sala
     const newRoom = await prisma.room.create({
       data: {
         name: roomName,
@@ -32,7 +36,6 @@ router.post("/rooms", async (req, res) => {
       },
     });
 
-    // Cria um WebSocket Server para essa sala
     createRoomWsServer(req.app.get("server"), newRoom.id);
 
     res
@@ -46,7 +49,6 @@ router.post("/rooms", async (req, res) => {
   }
 });
 
-// Entrar em uma sala
 router.post("/rooms/:roomId/join", async (req, res) => {
   const { roomId } = req.params;
   const { userName } = req.body;
@@ -56,22 +58,22 @@ router.post("/rooms/:roomId/join", async (req, res) => {
   }
 
   try {
+    const parsedRoomId = parseRoomId(roomId);
+
     const roomExists = await prisma.room.findUnique({
-      where: { id: parseInt(roomId) },
+      where: { id: parsedRoomId },
     });
 
     if (!roomExists) {
       return res.status(404).json({ message: "Room not found" });
     }
 
-    // Cria um novo usuário
     const newUser = await prisma.user.create({
       data: { name: userName },
     });
 
-    // Conecta o novo usuário à sala
     await prisma.room.update({
-      where: { id: parseInt(roomId) },
+      where: { id: parsedRoomId },
       data: {
         users: {
           connect: [{ id: newUser.id }],
@@ -88,7 +90,6 @@ router.post("/rooms/:roomId/join", async (req, res) => {
   }
 });
 
-// Criar um novo usuário
 router.post("/users", async (req, res) => {
   const { name } = req.body;
 
@@ -108,11 +109,9 @@ router.post("/users", async (req, res) => {
   }
 });
 
-// Listar todos os usuários
 router.get("/users", async (req, res) => {
   try {
     const users = await prisma.user.findMany();
-
     res.status(200).json(users);
   } catch (error) {
     console.error(error);

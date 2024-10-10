@@ -1,15 +1,10 @@
 const http = require("http");
-
-const { createRoomWsServer } = require("./app-ws");
 const app = require("./app");
 
 const server = http.createServer(app);
 app.set("server", server);
 
-app.get("/", (req, res) => {
-  res.send("Servidor Express está funcionando!");
-});
-
-server.listen(3000, () => {
-  console.log("App Express is running on http://localhost:3000");
+const PORT = process.env.PORT || 3000;
+server.listen(PORT, () => {
+  console.log(`App Express is running on http://localhost:${PORT}`);
 });
